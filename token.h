@@ -2,85 +2,119 @@
 #define TOKEN_H
 
 #include <string>
+using std::ostream;
+using std::string;
 
-class Token {
+class Token
+{
 public:
-    enum Type {
+    enum Type
+    {
         NUMBER,
         STRING,
 
-        // COMMENTS
+        INT,
+        FLOAT,
+        CHAR,
+        VOID,
 
+        FLOAT_NUM,
+        CHAR_LIT,
 
-        // KEYWORDS
-        KEYWORD,
+        // special symbols
+        BKL,        // [
+        BKR,        // ]
+        PL,         // (
+        PR,         // )
+        BCL,        // {
+        BCR,        // }
+        COMMA,      // ,
+        SEMICOLON,  // ;
+        COLON,      // :
+        QUESTION,   // ?
+        ASTERISK,   // *
+        DEFERED,   // *
+        ADDRESS,   // *
+        ASSIGNMENT, // =
+        IDENTIFIER,
+
+        DOT,        // .
+        ARROW,      // ->
+
+        // control flow
         IF,
         ELSE,
+
+        // looping
         FOR,
         WHILE,
         DO,
+
+        // function
         RETURN,
+        STRUCT,
+        CONST,
+
+        // special purpose
         BREAK,
         CONTINUE,
-        STRUCT,
 
-        IDENTIFIER,
-
-        // ARIMETICS OPERATORS
-        PLUS,
-        MINUS,
+        // arimethics operators
+        ADDITION,
+        SUBTRACTION,
         MULTIPLICATION,
         DIVISION,
-        MODULE,
+        MODULUS,
 
-        // RELATIONAL OPERATORS
-        EQ,
-        NEQ,
-        LT,
-        GT,
-        LTE,
-        GTE,
+        // relational operators
+        EQ,  // ==
+        NEQ, // !=
+        GT,  // >
+        LT,  // <
+        GTE, // >=
+        LTE, // <=
 
-        // LOGICAL OPERATORS
+        // booleans
+        TRUE,
+        FALSE,
+
+        // logical operators
         AND,
         OR,
         NOT,
 
-        // ASIGNMENT OPERATORS
-        ASSIGN,
-        PLUS_ASSIGN,
-        MINUS_ASSIGN,
-        MULT_ASSIGN,
-        DIV_ASSIGN,
-        MOD_ASSIGN,
+        // assign operators
+        ADD_ASSIGN,  // +=
+        SUB_ASSIGN,  // -=
+        MULT_ASSIGN, // *=
+        DIV_ASSIGN,  // /=
+        MOD_ASSIGN,  // %=
 
-        // SEPARATORS
-        PR,
-        PL,
-        BCR,        // [
-        BCL,        // ]
-        BKR,        // {
-        BKL,        // }
-        COMMA,      // ,
-        SEMICOLON,  // ;
-        COLON,      // :
-        PERIOD,     // .
-        ASTERISK,   // *
+        // unary operators
+        INCREMENT, // ++
+        DECREMENT, // --
 
-        // ERRORS
+        // ternary operator
+
+        // printf
+        PRINT,
+
+        // endline
+        END,
+
+        // error
         ERROR,
-        UNKNOWN
     };
 
     Type type;
-    std::string text;
+    string text;
 
     Token(Type type);
     Token(Type type, char c);
-    Token(Type type, const std::string& source, int first, int last);
+    Token(Type type, const string &source, int first, int last);
 
-    friend std::ostream& operator<<(std::ostream& outs, const Token& tok);
-    friend std::ostream& operator<<(std::ostream& outs, const Token* tok);
+    friend ostream &operator<<(ostream &outs, const Token &tok);
+    friend ostream &operator<<(ostream &outs, const Token *tok);
 };
 
 #endif // TOKEN_H
