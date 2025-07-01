@@ -1,8 +1,12 @@
 struct Person {
-    char* name;
+    int points;
+    int price;
     int age;
 };
 
+void printer() {
+    int a = 4;
+}
 int suma(){
     return 1;
 }
@@ -10,8 +14,12 @@ int suma(){
 int main() {
     int number;
     struct Person p;
-    p.name = "Jose";
+    p.points = 5;
     p.age = 14;
+    p.price = 25;
+    printf(p.points);
+    printf(p.age);
+    printf(p.price);
     int a = 4;
     int *b = &a;
 	for(number=1;number<=10;number++){

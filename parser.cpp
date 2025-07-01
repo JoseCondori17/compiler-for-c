@@ -228,6 +228,13 @@ unique_ptr<VarDeclaration> Parser::parseVarDeclaration() {
 }
 
 unique_ptr<Stm> Parser::parseStatement() {
+    if (match(Token::PRINTF)) {
+        expect(Token::PL, "Expected '(' after 'printf'");
+        auto exp = parseExpression();
+        expect(Token::PR, "Expected ')' after printf argument");
+        expect(Token::SEMICOLON, "Expected ';' after printf");
+        return make_unique<PrintStm>(std::move(exp));
+    }
     if (match(Token::IF)) return parseIfStatement();
     if (match(Token::WHILE)) return parseWhileStatement();
     if (match(Token::FOR)) return parseForStatement();
@@ -527,13 +534,6 @@ unique_ptr<Exp> Parser::parsePrimary() {
         auto expr = parseExpression();
         expect(Token::PR, "Expected ')' after expression");
         return expr;
-    }
-    
-    if (match(Token::PRINTF)) {
-        expect(Token::PL, "Expected '(' after 'printf'");
-        vector<unique_ptr<Exp>> args = parseArguments();
-        expect(Token::PR, "Expected ')' after printf arguments");
-        return make_unique<FunctionCallExp>("printf", std::move(args));
     }
     
     // Si llegamos aquí y el token es '}', probablemente estemos al final de un bloque

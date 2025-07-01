@@ -717,3 +717,552 @@ void TypeVisitor::visit(Program* p) {
 
 //////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////
+GenCodeVisitor::GenCodeVisitor(ostream* output) : output(output), label_counter(0), stack_offset(0) {
+    env.add_level(); // global level
+    loop_contexts = stack<LoopContext>(); // break y continue
+}
+
+void GenCodeVisitor::generate(Program* p) {
+    *output << ".section .rodata\n";
+    *output << "str_format: .string \"%s\\n\"\n";
+    *output << "int_format: .string \"%d\\n\"\n";
+    *output << "float_format: .string \"%.2f\\n\"\n";
+    *output << "\n.text\n";
+    *output << ".global main\n\n";
+    p->accept(this);
+}
+
+string GenCodeVisitor::next_label() {
+    return "L" + to_string(label_counter++);
+}
+
+void GenCodeVisitor::push_loop_context(const string& break_label, const string& continue_label) {
+    loop_contexts.push({break_label, continue_label});
+}
+
+void GenCodeVisitor::pop_loop_context() {
+    if (!loop_contexts.empty()) {
+        loop_contexts.pop();
+    }
+}
+
+string GenCodeVisitor::get_break_label() {
+    if (loop_contexts.empty()) {
+        cerr << "Error: break statement outside of loop" << endl;
+        exit(1);
+    }
+    return loop_contexts.top().break_label;
+}
+
+string GenCodeVisitor::get_continue_label() {
+    if (loop_contexts.empty()) {
+        cerr << "Error: continue statement outside of loop" << endl;
+        exit(1);
+    }
+    return loop_contexts.top().continue_label;
+}
+
+// Expression visitors
+void GenCodeVisitor::visit(BinaryExp* exp) {
+    exp->left->accept(this);
+    *output << "    pushq %rax\n";
+    
+    exp->right->accept(this);
+    *output << "    popq %rbx\n";
+    
+    switch (exp->op) {
+        case Token::PLUS:
+            *output << "    addq %rbx, %rax\n";
+            break;
+        case Token::MINUS:
+            *output << "    subq %rax, %rbx\n";
+            *output << "    movq %rbx, %rax\n";
+            break;
+        case Token::MULTIPLICATION:
+            *output << "    imulq %rbx, %rax\n";
+            break;
+        case Token::DIVISION:
+            *output << "    movq %rbx, %rcx\n";  // Guardar divisor
+            *output << "    movq %rcx, %rax\n";  // Dividendo en rax
+            *output << "    cqto\n";              // Extender signo
+            *output << "    idivq %rbx\n";        // Dividir por right (que está en rbx)
+            break;
+        case Token::MODULUS:
+            *output << "    movq %rbx, %rcx\n";  
+            *output << "    movq %rcx, %rax\n";  
+            *output << "    cqto\n";
+            *output << "    idivq %rbx\n";       
+            *output << "    movq %rdx, %rax\n";  // Resto en rdx
+            break;
+        case Token::LT:
+            *output << "    cmpq %rax, %rbx\n";
+            *output << "    setl %al\n";
+            *output << "    movzbq %al, %rax\n";
+            break;
+        case Token::LTE:
+            *output << "    cmpq %rax, %rbx\n";
+            *output << "    setle %al\n";
+            *output << "    movzbq %al, %rax\n";
+            break;
+        case Token::GT:
+            *output << "    cmpq %rax, %rbx\n";
+            *output << "    setg %al\n";
+            *output << "    movzbq %al, %rax\n";
+            break;
+        case Token::GTE:
+            *output << "    cmpq %rax, %rbx\n";
+            *output << "    setge %al\n";
+            *output << "    movzbq %al, %rax\n";
+            break;
+        case Token::EQ:
+            *output << "    cmpq %rax, %rbx\n";
+            *output << "    sete %al\n";
+            *output << "    movzbq %al, %rax\n";
+            break;
+        case Token::NEQ:
+            *output << "    cmpq %rax, %rbx\n";
+            *output << "    setne %al\n";
+            *output << "    movzbq %al, %rax\n";
+            break;
+        case Token::AND:
+            *output << "    andq %rbx, %rax\n";
+            break;
+        case Token::OR:
+            *output << "    orq %rbx, %rax\n";
+            break;
+    }
+}
+
+void GenCodeVisitor::visit(UnaryExp* exp) {
+    switch (exp->op) {
+        case Token::MINUS:
+            exp->exp->accept(this);
+            *output << "    negq %rax\n";
+            break;
+        case Token::PLUS:
+            exp->exp->accept(this);
+            break;
+        case Token::NOT:
+            exp->exp->accept(this);
+            *output << "    testq %rax, %rax\n";
+            *output << "    setz %al\n";
+            *output << "    movzbq %al, %rax\n";
+            break;
+        case Token::ADDRESS:
+            if (auto* id = dynamic_cast<IdentifierExp*>(exp->exp.get())) {
+                int offset = var_offsets[id->name];
+                *output << "    leaq " << offset << "(%rbp), %rax\n";
+            }
+            break;
+        case Token::MULTIPLICATION: // Dereference
+            exp->exp->accept(this);
+            *output << "    movq (%rax), %rax\n";
+            break;
+    }
+}
+
+void GenCodeVisitor::visit(NumberExp* exp) {
+    *output << "    movq $" << exp->value << ", %rax\n";
+}
+
+void GenCodeVisitor::visit(StringExp* exp) {
+    string label = "str_" + to_string(label_counter++);
+    // Cambiar a sección .rodata temporalmente
+    *output << ".section .rodata\n";
+    *output << label << ": .string \"" << exp->value << "\"\n";  // Agregar comillas
+    *output << ".text\n";
+    *output << "    leaq " << label << "(%rip), %rax\n";
+}
+
+void GenCodeVisitor::visit(BoolExp* exp) {
+    *output << "    movq $" << (exp->value ? 1 : 0) << ", %rax\n";
+}
+
+void GenCodeVisitor::visit(IdentifierExp* exp) {
+    if (var_offsets.find(exp->name) != var_offsets.end()) {
+        int offset = var_offsets[exp->name];
+        *output << "    movq " << offset << "(%rbp), %rax\n";
+    } else {
+        cerr << "Error: Variable no declarada: " << exp->name << endl;
+        exit(1);
+    }
+}
+
+void GenCodeVisitor::visit(AssignExp* exp) {
+    exp->exp->accept(this);
+    
+    if (var_offsets.find(exp->var) != var_offsets.end()) {
+        int offset = var_offsets[exp->var];
+        *output << "    movq %rax, " << offset << "(%rbp)\n";
+        env.update(exp->var, 0); // Actualizar environment (valor simbólico)
+    } else {
+        cerr << "Error: Variable no declarada: " << exp->var << endl;
+        exit(1);
+    }
+}
+
+void GenCodeVisitor::visit(FunctionCallExp* exp) {
+    // Guardar registros caller-saved
+    *output << "    pushq %rcx\n";
+    *output << "    pushq %rdx\n";
+    *output << "    pushq %rsi\n";
+    *output << "    pushq %rdi\n";
+    *output << "    pushq %r8\n";
+    *output << "    pushq %r9\n";
+    
+    // Pasar argumentos (System V ABI: rdi, rsi, rdx, rcx, r8, r9)
+    vector<string> arg_registers = {"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"};
+    
+    for (size_t i = 0; i < exp->args.size() && i < 6; i++) {
+        exp->args[i]->accept(this);
+        *output << "    movq %rax, " << arg_registers[i] << "\n";
+    }
+    
+    // Llamar función
+    *output << "    call " << exp->name << "\n";
+    
+    // Restaurar registros
+    *output << "    popq %r9\n";
+    *output << "    popq %r8\n";
+    *output << "    popq %rdi\n";
+    *output << "    popq %rsi\n";
+    *output << "    popq %rdx\n";
+    *output << "    popq %rcx\n";
+}
+
+void GenCodeVisitor::visit(ArrayAccessExp* exp) {
+    exp->array->accept(this);
+    *output << "    pushq %rax\n";
+    exp->index->accept(this);
+    *output << "    popq %rbx\n";
+    *output << "    imulq $8, %rax\n"; // Asumir elementos de 8 bytes
+    *output << "    addq %rbx, %rax\n";
+    *output << "    movq (%rax), %rax\n";
+}
+
+void GenCodeVisitor::visit(MemberAccessExp* exp) {
+    if (auto* id = dynamic_cast<IdentifierExp*>(exp->object.get())) {
+        string var_name = id->name;
+        string var_type = env.lookup_type(var_name);
+
+        if (var_type.find("struct ") == 0) {
+            string struct_name = var_type.substr(7);
+            string field_name = exp->member;
+            int field_offset = env.get_field_offset(struct_name, field_name);
+            int base_offset = var_offsets[var_name];
+            int total_offset = base_offset + field_offset;
+
+            *output << "    leaq " << total_offset << "(%rbp), %rax\n";
+
+            if (!exp->isPointer) {
+                string field_type = env.get_field_type(struct_name, field_name);
+                if (field_type == "int" || field_type.find("*") != string::npos) {
+                    *output << "    movq (%rax), %rax\n";
+                } else if (field_type == "float") {
+                    *output << "    movss (%rax), %xmm0\n";
+                }
+            }
+            return;
+        }
+    }
+}
+
+void GenCodeVisitor::visit(ConditionalExp* exp) {
+    string false_label = next_label();
+    string end_label = next_label();
+    
+    exp->condition->accept(this);
+    *output << "    testq %rax, %rax\n";
+    *output << "    jz " << false_label << "\n";
+    
+    exp->trueExp->accept(this);
+    *output << "    jmp " << end_label << "\n";
+    
+    *output << false_label << ":\n";
+    exp->falseExp->accept(this);
+    
+    *output << end_label << ":\n";
+}
+
+void GenCodeVisitor::visit(MemberAssignExp* exp) {
+    exp->value->accept(this);
+    
+    if (auto* memberAccess = dynamic_cast<MemberAccessExp*>(exp->object.get())) {
+        if (auto* id = dynamic_cast<IdentifierExp*>(memberAccess->object.get())) {
+            string var_name = id->name;
+            string var_type = env.lookup_type(var_name);
+            
+            if (var_type.find("struct ") == 0) {
+                string struct_name = var_type.substr(7);
+                string field_name = memberAccess->member;
+                
+                int field_offset = env.get_field_offset(struct_name, field_name);
+                int var_offset = var_offsets[var_name];
+                
+                *output << "    movq %rax, " << (var_offset + field_offset) << "(%rbp)\n";
+                return;
+            }
+        }
+    }
+}
+
+void GenCodeVisitor::visit(ArrayAssignExp* exp) {
+    exp->value->accept(this);
+    *output << "    pushq %rax\n";
+    
+    if (auto* arrayAccess = dynamic_cast<ArrayAccessExp*>(exp->array.get())) {
+        arrayAccess->array->accept(this);
+        *output << "    pushq %rax\n";
+        arrayAccess->index->accept(this);
+        *output << "    popq %rbx\n";
+        *output << "    imulq $8, %rax\n";
+        *output << "    addq %rbx, %rax\n";
+        *output << "    popq %rbx\n";
+        *output << "    movq %rbx, (%rax)\n";
+    }
+}
+
+void GenCodeVisitor::visit(PostIncrementExp* exp) {
+    if (auto* id = dynamic_cast<IdentifierExp*>(exp->exp.get())) {
+        int offset = var_offsets[id->name];
+        *output << "    movq " << offset << "(%rbp), %rax\n";
+        *output << "    pushq %rax\n";
+        if (exp->isIncrement) {
+            *output << "    incq " << offset << "(%rbp)\n";
+        } else {
+            *output << "    decq " << offset << "(%rbp)\n";
+        }
+        *output << "    popq %rax\n";
+    }
+}
+
+void GenCodeVisitor::visit(PreIncrementExp* exp) {
+    if (auto* id = dynamic_cast<IdentifierExp*>(exp->exp.get())) {
+        int offset = var_offsets[id->name];
+        if (exp->isIncrement) {
+            *output << "    incq " << offset << "(%rbp)\n";
+        } else {
+            *output << "    decq " << offset << "(%rbp)\n";
+        }
+        *output << "    movq " << offset << "(%rbp), %rax\n";
+    }
+}
+
+// Statement visitors
+void GenCodeVisitor::visit(ExpressionStm* stm) {
+    stm->exp->accept(this);
+}
+
+void GenCodeVisitor::visit(PrintStm* stm) {
+    if (auto* memberAccess = dynamic_cast<MemberAccessExp*>(stm->exp.get())) {
+        if (auto* id = dynamic_cast<IdentifierExp*>(memberAccess->object.get())) {
+            string var_name = id->name;
+            string var_type = env.lookup_type(var_name);
+            
+            if (var_type.find("struct ") == 0) {
+                string struct_name = var_type.substr(7);
+                string field_name = memberAccess->member;
+                int field_offset = env.get_field_offset(struct_name, field_name);
+                int var_offset = var_offsets[var_name];
+                
+                *output << "    movq " << (var_offset + field_offset) << "(%rbp), %rax\n";
+                *output << "    movq %rax, %rsi\n";
+                *output << "    leaq int_format(%rip), %rdi\n";
+                *output << "    call printf\n";
+                return;
+            }
+        }
+    }
+    
+    stm->exp->accept(this);
+    *output << "    movq %rax, %rsi\n";
+    *output << "    leaq int_format(%rip), %rdi\n";
+    *output << "    call printf\n";
+}
+
+void GenCodeVisitor::visit(IfStm* stm) {
+    string false_label = next_label();
+    string end_label = next_label();
+    
+    stm->condition->accept(this);
+    *output << "    testq %rax, %rax\n";
+    *output << "    jz " << false_label << "\n";
+    
+    stm->thenStm->accept(this);
+    
+    if (stm->elseStm) {
+        *output << "    jmp " << end_label << "\n";
+        *output << false_label << ":\n";
+        stm->elseStm->accept(this);
+        *output << end_label << ":\n";
+    } else {
+        *output << false_label << ":\n";
+    }
+}
+
+void GenCodeVisitor::visit(WhileStm* stm) {
+    string start_label = next_label();
+    string end_label = next_label();
+    
+    push_loop_context(end_label, start_label);
+    
+    *output << start_label << ":\n";
+    stm->condition->accept(this);
+    *output << "    testq %rax, %rax\n";
+    *output << "    jz " << end_label << "\n";
+    
+    stm->body->accept(this);
+    *output << "    jmp " << start_label << "\n";
+    *output << end_label << ":\n";
+    
+    pop_loop_context();
+}
+
+void GenCodeVisitor::visit(ForStm* stm) {
+    string start_lbl = next_label();
+    string continue_lbl = next_label();
+    string end_lbl = next_label();
+
+    push_loop_context(end_lbl, continue_lbl);
+
+    if (stm->init) {
+        stm->init->accept(this);
+    }
+
+    *output << start_lbl << ":\n";
+
+    if (stm->condition) {
+        stm->condition->accept(this);
+        *output << "    testq %rax, %rax\n";
+        *output << "    jz " << end_lbl << "\n";
+    }
+
+    stm->body->accept(this);
+
+    *output << continue_lbl << ":\n";
+    if (stm->increment) {
+        stm->increment->accept(this);
+    }
+
+    *output << "    jmp " << start_lbl << "\n";
+    *output << end_lbl << ":\n";
+
+    pop_loop_context();
+}
+
+void GenCodeVisitor::visit(DoWhileStm* stm) {
+    string start_label = next_label();
+    string continue_label = next_label();
+    string end_label = next_label();
+    
+    push_loop_context(end_label, continue_label);
+    
+    *output << start_label << ":\n";
+    stm->body->accept(this);
+    
+    *output << continue_label << ":\n";
+    stm->condition->accept(this);
+    *output << "    testq %rax, %rax\n";
+    *output << "    jnz " << start_label << "\n";
+    *output << end_label << ":\n";
+    
+    pop_loop_context();
+}
+
+void GenCodeVisitor::visit(BlockStm* stm) {
+    env.add_level();
+    
+    for (auto& stmt : stm->statements) {
+        stmt->accept(this);
+    }
+    
+    env.remove_level();
+}
+
+void GenCodeVisitor::visit(ReturnStm* stm) {
+    if (stm->exp) {
+        stm->exp->accept(this);
+    } else {
+        *output << "    movq $0, %rax\n";
+    }
+    
+    *output << "    movq %rbp, %rsp\n";
+    *output << "    popq %rbp\n";
+    *output << "    ret\n";
+}
+
+void GenCodeVisitor::visit(BreakStm* stm) {
+    string break_label = get_break_label();
+    *output << "    jmp " << break_label << "\n";
+}
+
+void GenCodeVisitor::visit(ContinueStm* stm) {
+    string continue_label = get_continue_label();
+    *output << "    jmp " << continue_label << "\n";
+}
+
+void GenCodeVisitor::visit(VarDeclaration* stm) {
+    if (stm->type.find("struct") == 0) {
+        string struct_name = stm->type.substr(7);
+        int size = env.get_type_size(stm->type);
+        stack_offset -= size;
+        var_offsets[stm->name] = stack_offset;
+        env.add_var(stm->name, stm->type);
+    } else {
+        stack_offset -= 8;
+        var_offsets[stm->name] = stack_offset;
+        env.add_var(stm->name, stm->type);
+    }
+
+    if (stm->init) {
+        stm->init->accept(this);
+        *output << "    movq %rax, " << var_offsets[stm->name] << "(%rbp)\n";
+    }
+}
+
+void GenCodeVisitor::visit(FunctionDeclaration* stm) {
+    *output << stm->name << ":\n";
+    *output << "    pushq %rbp\n";
+    *output << "    movq %rsp, %rbp\n";
+    
+    int saved_offset = stack_offset;
+    unordered_map<string, int> saved_offsets = var_offsets;
+    
+    stack_offset = 0;
+    var_offsets.clear();
+    
+    env.add_level();
+    
+    vector<string> param_registers = {"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"};
+    
+    for (size_t i = 0; i < stm->params.size() && i < 6; i++) {
+        stack_offset -= 8;
+        var_offsets[stm->params[i].second] = stack_offset;
+        *output << "    movq " << param_registers[i] << ", " << stack_offset << "(%rbp)\n";
+        env.add_var(stm->params[i].second, stm->params[i].first);
+    }
+    
+    stm->body->accept(this);
+    
+    // Solo generar epílogo si no hay return explícito
+    if (!dynamic_cast<ReturnStm*>(stm->body->statements.back().get())) {
+        *output << "    movq $0, %rax\n";
+        *output << "    movq %rbp, %rsp\n";
+        *output << "    popq %rbp\n";
+        *output << "    ret\n\n";
+    }
+    
+    env.remove_level();
+    stack_offset = saved_offset;
+    var_offsets = saved_offsets;
+}
+
+void GenCodeVisitor::visit(StructDeclaration* stm) {
+    env.add_struct(stm->name, stm->members);
+}
+
+void GenCodeVisitor::visit(Program* stm) {
+    for (auto& decl : stm->declarations) {
+        decl->accept(this);
+    }
+}

@@ -1,24 +1,6 @@
 {
     "files.associations": {
         "*.dbclient-js": "javascript",
-        "iostream": "cpp",
-        "stdexcept": "cpp",
-        "ios": "cpp",
-        "xiosbase": "cpp",
-        "xstring": "cpp",
-        "vector": "cpp",
-        "atomic": "cpp",
-        "format": "cpp",
-        "memory": "cpp",
-        "utility": "cpp",
-        "xutility": "cpp",
-        "istream": "cpp",
-        "tuple": "cpp",
-        "type_traits": "cpp",
-        "variant": "cpp",
-        "xlocmes": "cpp",
-        "xlocmon": "cpp",
-        "xlocnum": "cpp",
-        "xloctime": "cpp"
+        "xstring": "cpp"
     }
 }

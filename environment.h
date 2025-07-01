@@ -34,6 +34,14 @@ private:
         return -1;
     }
 
+    int calculate_struct_size(const string& struct_name) {
+        const auto& members = get_struct_members(struct_name);
+        int size = 0;
+        for (const auto& [type, name] : members) {
+            size += get_type_size(type);
+        }
+        return size;
+    }
 public:
     Environment() {}
 
@@ -155,6 +163,41 @@ public:
     bool has_struct(const string &name) const
     {
         return struct_defs.find(name) != struct_defs.end();
+    }
+
+    const vector<pair<string, string>>& get_struct_members(const string& struct_name) const {
+        auto it = struct_defs.find(struct_name);
+        if (it == struct_defs.end()) {
+            cerr << "Struct no definido: " << struct_name << endl;
+            exit(1);
+        }
+        return it->second;
+    }
+
+    int get_field_offset(const string& struct_name, const string& field_name) {
+        const auto& members = get_struct_members(struct_name);
+        int offset = 0;
+        
+        for (const auto& [type, name] : members) {
+            if (name == field_name) {
+                return offset;
+            }
+            offset += get_type_size(type);
+        }
+        
+        cerr << "Campo '" << field_name << "' no encontrado en struct " << struct_name << endl;
+        exit(1);
+    }
+
+    int get_type_size(const string& type) {
+        if (type == "int" || type == "float" || type.find("*") != string::npos) {
+            return 8;
+        }
+        if (type.find("struct ") == 0) {
+            string struct_name = type.substr(7);
+            return calculate_struct_size(struct_name);
+        }
+        return 8;
     }
 
     bool has_field(const string &structVar, const string &field)

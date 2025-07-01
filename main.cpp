@@ -45,7 +45,6 @@ int main(int argc, const char *argv[])
         cout << "Iniciando Visitor:" << endl;
         PrintVisitor printVisitor;
         TypeVisitor typeVisitor;
-        GenCodeVisitor gencodeVisitor;
         //ImpCODE interpreter;
         cout << endl;
         cout << "PRINTER RUN:" << endl;
@@ -59,7 +58,10 @@ int main(int argc, const char *argv[])
         cout  << endl;
         
         cout << "GENCODE RUN:" << endl;
-        gencodeVisitor.visit(program.get());
+        ofstream output("output.s");
+        GenCodeVisitor generator(&output);
+        generator.generate(program.get());
+        output.close();
         cout << "GENCODE VISITOR CORRECT:" << endl;
         cout  << endl;
     
