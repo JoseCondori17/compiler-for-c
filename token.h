@@ -1,120 +1,47 @@
 #ifndef TOKEN_H
 #define TOKEN_H
-
 #include <string>
-using std::ostream;
+#include <iostream>
 using std::string;
 
-class Token
-{
+class Token {
 public:
-    enum Type
-    {
-        NUMBER,
-        STRING,
-
-        INT,
-        FLOAT,
-        CHAR,
-        VOID,
-
-        FLOAT_NUM,
-        CHAR_LIT,
-
-        // special symbols
-        BKL,        // [
-        BKR,        // ]
-        PL,         // (
-        PR,         // )
-        BCL,        // {
-        BCR,        // }
-        COMMA,      // ,
-        SEMICOLON,  // ;
-        COLON,      // :
-        QUESTION,   // ?
-        ASTERISK,   // *
-        DEFERED,   // *
-        ADDRESS,   // *
-        ASSIGNMENT, // =
-        IDENTIFIER,
-
-        DOT,        // .
-        ARROW,      // ->
-
-        // control flow
-        IF,
-        ELSE,
-
-        // looping
-        FOR,
-        WHILE,
-        DO,
-
-        // function
-        RETURN,
-        STRUCT,
-        CONST,
-
-        // special purpose
-        BREAK,
-        CONTINUE,
-
-        // arimethics operators
-        ADDITION,
-        SUBTRACTION,
-        MULTIPLICATION,
-        DIVISION,
-        MODULUS,
-
-        // relational operators
-        EQ,  // ==
-        NEQ, // !=
-        GT,  // >
-        LT,  // <
-        GTE, // >=
-        LTE, // <=
-
-        // booleans
-        TRUE,
-        FALSE,
-
-        // logical operators
-        AND,
-        OR,
-        NOT,
-
-        // assign operators
-        ADD_ASSIGN,  // +=
-        SUB_ASSIGN,  // -=
-        MULT_ASSIGN, // *=
-        DIV_ASSIGN,  // /=
-        MOD_ASSIGN,  // %=
-
-        // unary operators
-        INCREMENT, // ++
-        DECREMENT, // --
-
-        // ternary operator
-
-        // printf
-        PRINT,
-
-        // endline
-        END,
-
-        // error
-        ERROR,
+    enum Type {
+        // BASIC
+        IDENTIFIER, ASSIGN, TRUE, FALSE, PRINTF,
+        // TYPES
+        INT, FLOAT, DOUBLE, CHAR, VOID, STRING, NUMBER, BOOL,
+        // CLOSURES
+        BRACKETL, BRACKETR, BRACESL, BRACESR, PL, PR,
+        // SYMBOLS
+        COMMA, SEMICOLON, COLON, QUESTION, ASTERISK, ADDRESS, ARROW,
+        // SENTENCES
+        IF, ELSE, FOR, WHILE, BREAK, CONTINUE, DO,
+        // SPECIAL
+        STRUCT, RETURN,
+        // OPERATIONS
+        PLUS, MINUS, MULTIPLICATION, DIVISION, MODULUS,
+        // RELATIONAL
+        LT, LTE, GT, GTE, EQ, NEQ,
+        // LOGICAL
+        AND, OR, NOT, DOT,
+        // INCREMENT/DECREMENT
+        INCREMENT, DECREMENT,
+        // SPECIAL
+        END, ERROR, HASH, INCLUDE
     };
 
     Type type;
     string text;
 
+    static string symbolToString(Type type);
+
     Token(Type type);
     Token(Type type, char c);
-    Token(Type type, const string &source, int first, int last);
-
-    friend ostream &operator<<(ostream &outs, const Token &tok);
-    friend ostream &operator<<(ostream &outs, const Token *tok);
+    Token(Type type, const string& source, int first, int last);
+    
+    friend std::ostream& operator<<(std::ostream& outs, const Token& tok);
+    friend std::ostream& operator<<(std::ostream& outs, const Token* tok);
 };
 
 #endif // TOKEN_H

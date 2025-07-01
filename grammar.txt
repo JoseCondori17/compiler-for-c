@@ -1,0 +1,72 @@
+Program        ::= TypeDecList? VarDecList? FunDecList? FunctionDef+
+TypeDecList    ::= ('typedef' TypeDef)*
+TypeDef        ::= Type id ';' | 'struct' id '{' FieldList '}' id? ';'
+VarDecList     ::= (VarDeclaration)*
+VarDeclaration ::= Type VarList ';'
+FunDecList     ::= (FunctionDecl)*
+FunctionDecl   ::= Type id '(' ParamList? ')' ';'
+FunctionDef    ::= Type id '(' ParamList? ')' '{' VarDecList? StmtList '}'
+ParamList      ::= Param (',' Param)*
+Param          ::= Type id
+VarList        ::= VarItem (',' VarItem)*
+VarItem        ::= Pointer? id ArrayDim?
+Type           ::= BaseType Pointer?
+BaseType       ::= 'int' | 'float' | 'double' | 'char' | 'void' | 'bool' | StructType | TypedefName
+StructType     ::= 'struct' id
+TypedefName    ::= id
+Pointer        ::= '*'+
+ArrayDim       ::= ('[' num ']')+
+FieldList      ::= Field (Field)*
+Field          ::= Type id ArrayDim? ';'
+StmtList       ::= (Stmt)*
+Stmt           ::= Assignment ';'
+               | FunctionCall ';'
+               | 'printf' '(' StringLiteral (',' ArgList)? ')' ';'
+               | 'return' Exp? ';'
+               | IfStmt
+               | WhileStmt
+               | ForStmt
+               | Block
+               | VarDeclaration
+
+Assignment     ::= LValue '=' Exp
+LValue         ::= id
+               | '*' LValue                    -- dereferencia
+               | LValue '[' Exp ']'           -- acceso array
+               | LValue '.' id                -- acceso campo struct
+               | LValue '->' id               -- acceso campo via puntero
+
+Block          ::= '{' VarDecList? StmtList '}'
+
+IfStmt         ::= 'if' '(' CExp ')' Stmt ('else' Stmt)?
+WhileStmt      ::= 'while' '(' CExp ')' Stmt
+ForStmt        ::= 'for' '(' Assignment? ';' CExp? ';' Assignment? ')' Stmt
+
+CExp           ::= LogicalOr
+LogicalOr      ::= LogicalAnd ('||' LogicalAnd)*
+LogicalAnd     ::= Equality ('&&' Equality)*
+Equality       ::= Relational (('==' | '!=') Relational)*
+Relational     ::= Additive (('<' | '<=' | '>' | '>=') Additive)*
+Additive       ::= Multiplicative (('+' | '-') Multiplicative)*
+Multiplicative ::= Unary (('*' | '/' | '%') Unary)*
+
+Unary          ::= ('-' | '+' | '*') Unary
+               | Postfix
+
+Postfix        ::= Primary ('[' Exp ']' | '.' id | '->' id)*
+
+Primary        ::= id
+               | num
+               | float
+               | StringLiteral
+               | CharLiteral
+               | 'true' | 'false'
+               | 'NULL'
+               | '(' Exp ')'
+               | FunctionCall
+
+FunctionCall   ::= id '(' ArgList? ')'
+ArgList        ::= Exp (',' Exp)*
+StringLiteral  ::= '"' [^"]* '"'
+CharLiteral    ::= "'" [^'] "'"
+Exp            ::= CExp

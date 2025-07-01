@@ -2,6 +2,8 @@
 #include <fstream>
 #include <string>
 #include "scanner.h"
+#include "parser.h"
+#include "visitor.h"
 
 using namespace std;
 
@@ -35,26 +37,40 @@ int main(int argc, const char *argv[])
     test_scanner(&scanner_test);
     cout << "Scanner exitoso" << endl;
     cout << endl;
-    /*     cout << "Iniciando parsing:" << endl;
-        Parser parser(&scanner);
-        try {
-            Program* program = parser.parseProgram();
-            cout << "Parsing exitoso" << endl << endl;
-            cout << "Iniciando Visitor:" << endl;
-            PrintVisitor printVisitor;
-            ImpCODE interpreter;
-            cout << endl;
-            cout << "IMPRIMIR:" << endl;
-            printVisitor.imprimir(program);
-            cout  << endl;
-            cout << endl << "Run program:" << endl;
-            interpreter.interpret(program);
-            cout << "End of program execution" << endl;
-            delete program;
-        } catch (const exception& e) {
-            cout << "Error durante la ejecución: " << e.what() << endl;
-            return 1;
-        }
-     */
+    cout << "Iniciando parsing:" << endl;
+    Parser parser(&scanner);
+    try {
+        unique_ptr<Program> program = parser.parse();
+        cout << "Parsing exitoso" << endl << endl;
+        cout << "Iniciando Visitor:" << endl;
+        PrintVisitor printVisitor;
+        TypeVisitor typeVisitor;
+        GenCodeVisitor gencodeVisitor;
+        //ImpCODE interpreter;
+        cout << endl;
+        cout << "PRINTER RUN:" << endl;
+        printVisitor.imprimir(program.get());
+        cout << "PRINT VISITOR CORRECT:" << endl;
+        cout  << endl;
+
+        cout << "TYPE CHECKER RUN:" << endl;
+        typeVisitor.visit(program.get());
+        cout << "TYPE CHECKER VISITOR CORRECT:" << endl;
+        cout  << endl;
+        
+        cout << "GENCODE RUN:" << endl;
+        gencodeVisitor.visit(program.get());
+        cout << "GENCODE VISITOR CORRECT:" << endl;
+        cout  << endl;
+    
+        /* cout << endl << "Run program:" << endl;
+        interpreter.interpret(program); */
+        cout << "End of program execution" << endl;
+        //delete program;
+    } catch (const exception& e) {
+        cout << "Error durante la ejecución: " << e.what() << endl;
+        return 1;
+    }
+
     return 0;
 }
