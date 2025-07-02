@@ -1,0 +1,33 @@
+#include <stdio.h>
+
+struct Semaforo {
+    int rojo;
+    int amarillo;
+    int verde;
+    int tiempo_rojo;
+    int tiempo_verde;
+};
+
+int main() {
+    struct Semaforo ciudad;
+    
+
+    ciudad.rojo = 1;       // 1 = encendido, 0 = apagado
+    ciudad.amarillo = 0;
+    ciudad.verde = 0;
+    ciudad.tiempo_rojo = 30;  // segundos
+    ciudad.tiempo_verde = 45;
+    
+    printf(ciudad.rojo);
+    printf(ciudad.amarillo);
+    printf(ciudad.verde);
+    printf(ciudad.tiempo_rojo);
+    printf(ciudad.tiempo_verde);
+    
+    // Simular cambio de luz
+    ciudad.rojo = 0;
+    ciudad.verde = 1;
+    printf(ciudad.tiempo_verde);
+    
+    return 0;
+}

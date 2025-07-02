@@ -1,0 +1,12 @@
+#include <stdio.h>
+
+int algo() { 
+    return 20; 
+    }
+
+int main() {
+    int x; 
+    x = algo();
+    printf(x);
+    return 0;
+}

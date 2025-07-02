@@ -1,0 +1,11 @@
+#include <stdio.h>
+
+int main() {
+    int x = 3; 
+    int y;
+    if(x > 0){
+        y = 1;
+    }
+    printf(y);
+    return 0;
+}

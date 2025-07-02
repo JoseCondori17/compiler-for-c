@@ -1,0 +1,22 @@
+struct Tienda {
+    int meses;
+    int precio;
+    int anio;
+    int aniversario;
+    int codigo;
+};
+
+int main() {
+    struct Tienda p;
+    p.anio = 5;
+    p.meses = 4;
+    p.precio = 100;
+    p.aniversario = 2024;
+    p.codigo = 2021;
+    printf(p.anio);
+    printf(p.meses);
+    printf(p.precio);
+    printf(p.aniversario);
+    printf(p.codigo);
+    return 0;
+}

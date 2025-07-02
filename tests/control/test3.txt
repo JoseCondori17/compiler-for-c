@@ -1,0 +1,15 @@
+#include <stdio.h>
+
+int main() {
+    int x = 20; 
+    int y = 10;
+    int z;
+    if(x > y){
+        z = 400;
+    }
+    if(y < x){
+        z = z + 100;
+    }
+    printf(z);
+    return 0;
+}

@@ -1,0 +1,14 @@
+#include <stdio.h>
+
+int main() {
+    int x = 0; 
+    int y;
+    if(x > 0){
+        y = 1;
+    }
+    else{
+        y = 200;
+    }
+    printf(y);
+    return 0;
+}

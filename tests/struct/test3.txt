@@ -1,0 +1,21 @@
+#include <stdio.h>
+
+struct Producto {
+    int id;
+    int precio;
+    int stock;
+};
+
+int main() {
+    struct Producto producto1;
+    
+    producto1.id = 101;
+    producto1.precio = 29;
+    producto1.stock = 15;
+    
+    printf(producto1.id);
+    printf(producto1.precio);
+    printf(producto1.stock);
+    
+    return 0;
+}

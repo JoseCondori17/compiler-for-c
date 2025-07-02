@@ -1,0 +1,9 @@
+#include <stdio.h>
+
+int main() {
+    int x = 69; 
+    int y = 0;
+    int z = (x > y) && (y != 0);
+    printf(z);
+    return 0;
+}

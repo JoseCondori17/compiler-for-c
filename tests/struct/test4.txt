@@ -1,0 +1,21 @@
+#include <stdio.h>
+
+struct Tiempo {
+    int horas;
+    int minutos;
+    int segundos;
+};
+
+int main() {
+    struct Tiempo ahora;
+    
+    ahora.horas = 14;
+    ahora.minutos = 30;
+    ahora.segundos = 45;
+    
+    printf(ahora.horas);
+    printf(ahora.minutos);
+    printf(ahora.segundos);
+    
+    return 0;
+}

@@ -1,0 +1,17 @@
+#include <stdio.h>
+
+int main() {
+    int x = 10; 
+    int y = 20;
+    int z = 30;
+    if(x > y){
+        printf(x);
+        return 0;
+    }
+    if(x < y){
+        printf(y);
+        return 0;
+    }
+    printf(z);
+    return 0;
+}

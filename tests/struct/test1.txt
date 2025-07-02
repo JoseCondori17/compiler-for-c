@@ -1,0 +1,17 @@
+struct Person {
+    int points;
+    int price;
+    int age;
+};
+
+int main() {
+    int number;
+    struct Person p;
+    p.points = 5;
+    p.age = 14;
+    p.price = 25;
+    printf(p.points);
+    printf(p.age);
+    printf(p.price);
+    return 0;
+}
