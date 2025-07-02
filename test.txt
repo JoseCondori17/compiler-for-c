@@ -1,1 +1,1 @@
-float x = 42.66;
+float x = 10;
