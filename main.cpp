@@ -76,6 +76,8 @@ int main(int argc, const char *argv[])
 
     return 0;
 }
-
+//Para recompilar:
 //g++ *.cpp -o program
 //./program.exe "test.txt"
+//Para ejecutar los tests(luego de recompilar para aplicar cambios)
+//python make_test.py

@@ -1,0 +1,8 @@
+#include <stdio.h>
+
+int main() {
+    int value = 42;       // Se crea variable con valor 42
+    int *ptr = &value;    // Puntero simple apunta a value
+    int **dbl_ptr = &ptr; // Puntero doble apunta a ptr
+    return 0;
+}

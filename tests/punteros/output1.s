@@ -2,6 +2,8 @@
 str_format: .string "%s\n"
 int_format: .string "%d\n"
 float_format: .string "%.2f\n"
+char_format: .string "%c\n"
+ptr_format: .string "%p\n"
 
 .text
 .global main
@@ -12,21 +14,17 @@ main:
     pushq %rbp
     movq %rsp, %rbp
     subq $16, %rsp # espacio para variables locales
-    movq $3, %rax
-    movq %rax, -16(%rbp) # inicializa x
+    # Reserva espacio para variable 'a' en offset -8
+    movq $16, %rax
+    # Inicializa 'a' con valor en %rax
+    movq %rax, -8(%rbp) # inicializa a
+    # Reserva espacio para variable 'b' en offset -16
+    leaq -8(%rbp), %rax
+    movq %rax, -16(%rbp)
+    # Carga dirección almacenada en 'b'
     movq -16(%rbp), %rax
-    pushq %rax
-    movq $0, %rax
-    popq %rbx
-    cmpq %rax, %rbx
-    setg %al
-    movzbq %al, %rax
-    testq %rax, %rax
-    jz L0
-    movq $1, %rax
-    movq %rax, -24(%rbp)
-L0:
-    movq -24(%rbp), %rax
+    # Carga valor apuntado por 'b'
+    movq (%rax), %rax
     movq %rax, %rsi
     leaq int_format(%rip), %rdi
     movq $0, %rax

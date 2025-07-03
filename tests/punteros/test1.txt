@@ -1,8 +1,9 @@
 #include <stdio.h>
 
 int main() {
-    int a = 69; 
-    int *b = &a;
+    int a = 16; 
+    int *b;
+    b = &a;
     printf(*b);
     return 0;
 }

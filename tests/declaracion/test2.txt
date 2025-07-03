@@ -3,5 +3,7 @@
 int main() {
     int x = 200; 
     int y = 100;
+    printf(x);
+    printf(y);
     return 0;
 }

@@ -1,7 +1,9 @@
 #include <stdio.h>
 
 int main() {
-    int x; 
-    int y;
+    int x=40; 
+    int y=10;
+    printf(x);
+    printf(y);
     return 0;
 }

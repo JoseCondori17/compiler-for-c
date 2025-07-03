@@ -1,0 +1,11 @@
+#include <stdio.h>
+
+int main() {
+    int num = 8;
+    int *ptr = &num;
+
+    num = num + 5;
+    printf(num);
+    printf(*ptr);
+    return 0;
+}

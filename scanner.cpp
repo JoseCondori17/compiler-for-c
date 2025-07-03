@@ -159,7 +159,7 @@ Token* Scanner::nextToken() {
                 }
                 break;
             case '*': 
-                token = new Token(Token::MULTIPLICATION, c);
+                token = new Token(Token::ASTERISK, c);
                 current++;
                 break;
             case '/': 

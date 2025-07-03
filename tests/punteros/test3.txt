@@ -1,0 +1,13 @@
+#include <stdio.h>
+
+int main() {
+    int a = 22; 
+    int *b;
+    b = &a;
+    printf(b); //memoria a la que apunta
+    printf(&b); // su lugar en memoria
+    printf(*b);//valor al que apunta 22
+    printf(&a);// lugar en memoria
+    printf(a);// valor 22
+    return 0;
+}

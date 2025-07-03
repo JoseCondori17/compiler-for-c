@@ -1,0 +1,11 @@
+#include <stdio.h>
+
+int main() {
+    int a = 18; 
+    int *b;
+    b = &a;
+    printf(*b);
+    a = 30;
+    printf(*b);
+    return 0;
+}

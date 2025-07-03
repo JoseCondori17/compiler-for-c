@@ -727,6 +727,8 @@ void GenCodeVisitor::generate(Program* p) {
     *output << "str_format: .string \"%s\\n\"\n";
     *output << "int_format: .string \"%d\\n\"\n";
     *output << "float_format: .string \"%.2f\\n\"\n";
+    *output << "char_format: .string \"%c\\n\"\n";
+    *output << "ptr_format: .string \"%p\\n\"\n";
     *output << "\n.text\n";
     *output << ".global main\n\n";
     p->accept(this);
@@ -766,10 +768,34 @@ string GenCodeVisitor::get_continue_label() {
 void GenCodeVisitor::visit(BinaryExp* exp) {
     exp->left->accept(this);
     *output << "    pushq %rax\n";
-    
     exp->right->accept(this);
     *output << "    popq %rbx\n";
-    
+
+    // Pointer arithmetic support
+    // If one operand is a pointer and the other is int, scale the int by 8
+    // Only for PLUS/MINUS
+    if (exp->op == Token::PLUS || exp->op == Token::MINUS) {
+        // Try to detect pointer arithmetic
+        // Only works for simple IdentifierExp for now
+        string left_type, right_type;
+        if (auto* idl = dynamic_cast<IdentifierExp*>(exp->left.get())) {
+            left_type = env.lookup_type(idl->name);
+        }
+        if (auto* idr = dynamic_cast<IdentifierExp*>(exp->right.get())) {
+            right_type = env.lookup_type(idr->name);
+        }
+        // Pointer + int
+        if (!left_type.empty() && left_type.back() == '*' && (right_type.empty() || right_type == "int")) {
+            // left is pointer, right is int
+            *output << "    imulq $8, %rax\n";
+        }
+        // int + pointer
+        if (!right_type.empty() && right_type.back() == '*' && (left_type.empty() || left_type == "int")) {
+            // right is pointer, left is int
+            *output << "    imulq $8, %rbx\n";
+        }
+    }
+
     switch (exp->op) {
         case Token::PLUS:
             *output << "    addq %rbx, %rax\n";
@@ -851,12 +877,26 @@ void GenCodeVisitor::visit(UnaryExp* exp) {
             *output << "    movzbq %al, %rax\n";
             break;
         case Token::ADDRESS:
+            // &var
             if (auto* id = dynamic_cast<IdentifierExp*>(exp->exp.get())) {
                 int offset = var_offsets[id->name];
                 *output << "    leaq " << offset << "(%rbp), %rax\n";
+            } else if (auto* member = dynamic_cast<MemberAccessExp*>(exp->exp.get())) {
+                // &obj.member
+                if (auto* id = dynamic_cast<IdentifierExp*>(member->object.get())) {
+                    string var_name = id->name;
+                    string var_type = env.lookup_type(var_name);
+                    if (var_type.find("struct ") == 0) {
+                        string struct_name = var_type.substr(7);
+                        string field_name = member->member;
+                        int field_offset = env.get_field_offset(struct_name, field_name);
+                        int base_offset = var_offsets[var_name];
+                        *output << "    leaq " << (base_offset + field_offset) << "(%rbp), %rax\n";
+                    }
+                }
             }
             break;
-        case Token::MULTIPLICATION: // Dereference
+        case Token::MULTIPLICATION: // Dereference *p
             exp->exp->accept(this);
             *output << "    movq (%rax), %rax\n";
             break;
@@ -891,12 +931,12 @@ void GenCodeVisitor::visit(IdentifierExp* exp) {
 }
 
 void GenCodeVisitor::visit(AssignExp* exp) {
+    // Assignment to pointer or normal variable
     exp->exp->accept(this);
-    
     if (var_offsets.find(exp->var) != var_offsets.end()) {
         int offset = var_offsets[exp->var];
         *output << "    movq %rax, " << offset << "(%rbp)\n";
-        env.update(exp->var, 0); // Actualizar environment (valor simbólico)
+        env.update(exp->var, 0);
     } else {
         cerr << "Error: Variable no declarada: " << exp->var << endl;
         exit(1);
@@ -947,25 +987,36 @@ void GenCodeVisitor::visit(ArrayAccessExp* exp) {
 }
 
 void GenCodeVisitor::visit(MemberAccessExp* exp) {
-     if (auto* id = dynamic_cast<IdentifierExp*>(exp->object.get())) {
+    // obj.member or ptr->member
+    if (auto* id = dynamic_cast<IdentifierExp*>(exp->object.get())) {
         string var_name = id->name;
         string var_type = env.lookup_type(var_name);
-
         if (var_type.find("struct ") == 0) {
             string struct_name = var_type.substr(7);
             string field_name = exp->member;
             int field_offset = env.get_field_offset(struct_name, field_name);
             int base_offset = var_offsets[var_name];
-
             if (exp->isPointer) {
+                // obj is a pointer to struct
                 *output << "    movq " << base_offset << "(%rbp), %rax\n";
                 *output << "    addq $" << field_offset << ", %rax\n";
+                *output << "    movq (%rax), %rax\n";
             } else {
-                *output << "    movq " << base_offset + field_offset << "(%rbp), %rax\n";
+                *output << "    movq " << (base_offset + field_offset) << "(%rbp), %rax\n";
             }
             return;
         }
+        // Pointer to int, e.g. int *p; *p
+        if (!exp->isPointer && var_type.back() == '*') {
+            int base_offset = var_offsets[var_name];
+            *output << "    movq " << base_offset << "(%rbp), %rax\n";
+            *output << "    movq (%rax), %rax\n";
+            return;
+        }
     }
+    // General fallback: evaluate object, then offset
+    exp->object->accept(this);
+    // Not implemented: dynamic offset for general cases
 }
 
 void GenCodeVisitor::visit(ConditionalExp* exp) {
@@ -987,22 +1038,36 @@ void GenCodeVisitor::visit(ConditionalExp* exp) {
 
 void GenCodeVisitor::visit(MemberAssignExp* exp) {
     exp->value->accept(this);
-    
     if (auto* memberAccess = dynamic_cast<MemberAccessExp*>(exp->object.get())) {
         if (auto* id = dynamic_cast<IdentifierExp*>(memberAccess->object.get())) {
             string var_name = id->name;
             string var_type = env.lookup_type(var_name);
-            
             if (var_type.find("struct ") == 0) {
                 string struct_name = var_type.substr(7);
                 string field_name = memberAccess->member;
-                
                 int field_offset = env.get_field_offset(struct_name, field_name);
                 int var_offset = var_offsets[var_name];
-                
-                *output << "    movq %rax, " << (var_offset + field_offset) << "(%rbp)\n";
+                if (memberAccess->isPointer) {
+                    // ptr->field = value
+                    *output << "    movq " << var_offset << "(%rbp), %rbx\n";
+                    *output << "    addq $" << field_offset << ", %rbx\n";
+                    *output << "    movq %rax, (%rbx)\n";
+                } else {
+                    // obj.field = value
+                    *output << "    movq %rax, " << (var_offset + field_offset) << "(%rbp)\n";
+                }
                 return;
             }
+        }
+    }
+    // Assignment through pointer: *p = value
+    if (auto* unary = dynamic_cast<UnaryExp*>(exp->object.get())) {
+        if (unary->op == Token::MULTIPLICATION) {
+            unary->exp->accept(this); // address in %rax
+            *output << "    movq %rax, %rbx\n";
+            exp->value->accept(this);
+            *output << "    movq %rax, (%rbx)\n";
+            return;
         }
     }
 }
@@ -1010,7 +1075,6 @@ void GenCodeVisitor::visit(MemberAssignExp* exp) {
 void GenCodeVisitor::visit(ArrayAssignExp* exp) {
     exp->value->accept(this);
     *output << "    pushq %rax\n";
-    
     if (auto* arrayAccess = dynamic_cast<ArrayAccessExp*>(exp->array.get())) {
         arrayAccess->array->accept(this);
         *output << "    pushq %rax\n";
@@ -1021,31 +1085,15 @@ void GenCodeVisitor::visit(ArrayAssignExp* exp) {
         *output << "    popq %rbx\n";
         *output << "    movq %rbx, (%rax)\n";
     }
-}
-
-void GenCodeVisitor::visit(PostIncrementExp* exp) {
-    if (auto* id = dynamic_cast<IdentifierExp*>(exp->exp.get())) {
-        int offset = var_offsets[id->name];
-        *output << "    movq " << offset << "(%rbp), %rax\n";
-        *output << "    pushq %rax\n";
-        if (exp->isIncrement) {
-            *output << "    incq " << offset << "(%rbp)\n";
-        } else {
-            *output << "    decq " << offset << "(%rbp)\n";
+    // Assignment through pointer: *p = value
+    if (auto* unary = dynamic_cast<UnaryExp*>(exp->array.get())) {
+        if (unary->op == Token::MULTIPLICATION) {
+            unary->exp->accept(this); // address in %rax
+            *output << "    movq %rax, %rbx\n";
+            *output << "    popq %rax\n";
+            *output << "    movq %rax, (%rbx)\n";
+            return;
         }
-        *output << "    popq %rax\n";
-    }
-}
-
-void GenCodeVisitor::visit(PreIncrementExp* exp) {
-    if (auto* id = dynamic_cast<IdentifierExp*>(exp->exp.get())) {
-        int offset = var_offsets[id->name];
-        if (exp->isIncrement) {
-            *output << "    incq " << offset << "(%rbp)\n";
-        } else {
-            *output << "    decq " << offset << "(%rbp)\n";
-        }
-        *output << "    movq " << offset << "(%rbp), %rax\n";
     }
 }
 
@@ -1055,39 +1103,68 @@ void GenCodeVisitor::visit(ExpressionStm* stm) {
 }
 
 void GenCodeVisitor::visit(PrintStm* stm) {
-    if (auto* memberAccess = dynamic_cast<MemberAccessExp*>(stm->exp.get())) {
-        if (auto* id = dynamic_cast<IdentifierExp*>(memberAccess->object.get())) {
-            string var_name = id->name;
-            string var_type = env.lookup_type(var_name);
-            string format_label;
-            if (var_type == "int") {
-                format_label = "int_format";
-            } else if (var_type == "float" || var_type == "double") {
-                format_label = "float_format";
-            } else if (var_type == "char") {
-                format_label = "char_format";
-            } else {
-                format_label = "int_format"; // Default
-            }
-            
-            if (var_type.find("struct ") == 0) {
-                string struct_name = var_type.substr(7);
-                string field_name = memberAccess->member;
-                int field_offset = env.get_field_offset(struct_name, field_name);
-                int var_offset = var_offsets[var_name];
-                
-                *output << "    movq " << (var_offset + field_offset) << "(%rbp), %rax\n";
-                *output << "    movq %rax, %rsi\n";
-                *output << "    leaq " << format_label << "(%rip), %rdi\n";
-                *output << "    call printf\n";
-                return;
+    string format = "int_format";
+    string var_type;
+    bool isPointer = false;
+    bool isDereference = false;
+    // Detecta si es un identificador (b)
+    if (auto* id = dynamic_cast<IdentifierExp*>(stm->exp.get())) {
+        var_type = env.lookup_type(id->name);
+        if (!var_type.empty() && var_type.back() == '*') {
+            isPointer = true;
+        }
+    }
+    // Detecta si es una desreferenciación (*b)
+    if (auto* unary = dynamic_cast<UnaryExp*>(stm->exp.get())) {
+        if (unary->op == Token::ASTERISK || unary->op == Token::MULTIPLICATION) {
+            isDereference = true;
+            if (auto* id = dynamic_cast<IdentifierExp*>(unary->exp.get())) {
+                var_type = env.lookup_type(id->name);
+                if (!var_type.empty() && var_type.back() == '*') {
+                    var_type = var_type.substr(0, var_type.size() - 1);
+                }
             }
         }
     }
-    
-    stm->exp->accept(this);
+    // Si es puntero y no es desreferencia, imprime como dirección
+    if (isPointer && !isDereference) format = "ptr_format";
+    else if (isDereference) format = "int_format";
+    else if (var_type == "float" || var_type == "double") format = "float_format";
+    else if (var_type == "char") format = "char_format";
+    else format = "int_format";
+    // Genera el valor a imprimir
+    if (isDereference) {
+        // *b: cargar dirección de b, luego valor apuntado
+        auto* unary = dynamic_cast<UnaryExp*>(stm->exp.get());
+        if (auto* id = dynamic_cast<IdentifierExp*>(unary->exp.get())) {
+            int offset = var_offsets[id->name];
+            *output << "    # Carga dirección almacenada en '" << id->name << "'\n";
+            *output << "    movq " << offset << "(%rbp), %rax\n";
+            *output << "    # Carga valor apuntado por '" << id->name << "'\n";
+            *output << "    movq (%rax), %rax\n";
+        }
+    } else if (isPointer) {
+        // b: cargar dirección almacenada en b
+        auto* id = dynamic_cast<IdentifierExp*>(stm->exp.get());
+        int offset = var_offsets[id->name];
+        *output << "    # Carga dirección almacenada en '" << id->name << "'\n";
+        *output << "    movq " << offset << "(%rbp), %rax\n";
+    } else if (auto* unary = dynamic_cast<UnaryExp*>(stm->exp.get())) {
+        // &b: cargar dirección de b
+        if (unary->op == Token::ADDRESS) {
+            if (auto* id = dynamic_cast<IdentifierExp*>(unary->exp.get())) {
+                int offset = var_offsets[id->name];
+                *output << "    # Carga dirección de variable '" << id->name << "'\n";
+                *output << "    leaq " << offset << "(%rbp), %rax\n";
+                format = "ptr_format";
+            }
+        }
+    } else {
+        // Valor normal
+        stm->exp->accept(this);
+    }
     *output << "    movq %rax, %rsi\n";
-    *output << "    leaq int_format(%rip), %rdi\n";
+    *output << "    leaq " << format << "(%rip), %rdi\n";
     *output << "    movq $0, %rax\n";
     *output << "    call printf\n";
 }
@@ -1295,22 +1372,24 @@ void GenCodeVisitor::visit(FunctionDeclaration* stm) {
     }
     
     // Second pass to generate initialization code
-    stack_offset = -8 - 8*stm->params.size();
+    int local_offset = -8 - 8*stm->params.size();
     for (auto& stmt : stm->body->statements) {
         if (auto varDecl = dynamic_cast<VarDeclaration*>(stmt.get())) {
             int size = 8;
             if (varDecl->type.find("struct ") == 0) {
                 size = env.get_type_size(varDecl->type);
             }
-            stack_offset -= size;
-            var_offsets[varDecl->name] = stack_offset;
+            // Comentario: asigna espacio para variable local
+            *output << "    # Reserva espacio para variable '" << varDecl->name << "' en offset " << local_offset << "\n";
+            var_offsets[varDecl->name] = local_offset;
             env.add_var(varDecl->name, varDecl->type);
-            
             if (varDecl->init) {
                 varDecl->init->accept(this);
-                *output << "    movq %rax, " << stack_offset << "(%rbp) # inicializa " 
+                *output << "    # Inicializa '" << varDecl->name << "' con valor en %rax\n";
+                *output << "    movq %rax, " << local_offset << "(%rbp) # inicializa " 
                        << varDecl->name << "\n";
             }
+            local_offset -= size;
         }
     }
     
@@ -1340,5 +1419,33 @@ void GenCodeVisitor::visit(StructDeclaration* stm) {
 void GenCodeVisitor::visit(Program* stm) {
     for (auto& decl : stm->declarations) {
         decl->accept(this);
+    }
+}
+
+// Agrega estas definiciones si no existen ya en el archivo:
+
+void GenCodeVisitor::visit(PostIncrementExp* exp) {
+    if (auto* id = dynamic_cast<IdentifierExp*>(exp->exp.get())) {
+        int offset = var_offsets[id->name];
+        *output << "    movq " << offset << "(%rbp), %rax\n";
+        *output << "    pushq %rax\n";
+        if (exp->isIncrement) {
+            *output << "    incq " << offset << "(%rbp)\n";
+        } else {
+            *output << "    decq " << offset << "(%rbp)\n";
+        }
+        *output << "    popq %rax\n";
+    }
+}
+
+void GenCodeVisitor::visit(PreIncrementExp* exp) {
+    if (auto* id = dynamic_cast<IdentifierExp*>(exp->exp.get())) {
+        int offset = var_offsets[id->name];
+        if (exp->isIncrement) {
+            *output << "    incq " << offset << "(%rbp)\n";
+        } else {
+            *output << "    decq " << offset << "(%rbp)\n";
+        }
+        *output << "    movq " << offset << "(%rbp), %rax\n";
     }
 }

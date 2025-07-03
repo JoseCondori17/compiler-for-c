@@ -468,7 +468,7 @@ unique_ptr<Exp> Parser::parseMultiplicative() {
 }
 
 unique_ptr<Exp> Parser::parseUnary() {
-    if (match(Token::NOT) || match(Token::MINUS) || match(Token::PLUS) || match(Token::ADDRESS) || match(Token::MULTIPLICATION)) {
+    if (match(Token::NOT) || match(Token::MINUS) || match(Token::PLUS) || match(Token::ADDRESS) || match(Token::ASTERISK)) {
         Token::Type op = previous->type;
         auto right = parseUnary();
         return make_unique<UnaryExp>(op, std::move(right));
@@ -588,12 +588,10 @@ string Parser::parseType() {
 
 string Parser::parseFullType() {
     string baseType = parseType();
-    
     // Handle pointers
-    while (match(Token::MULTIPLICATION)) {
+    while (match(Token::ASTERISK)) {
         baseType += "*";
     }
-    
     return baseType;
 }
 
