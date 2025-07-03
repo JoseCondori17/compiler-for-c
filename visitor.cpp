@@ -904,38 +904,35 @@ void GenCodeVisitor::visit(AssignExp* exp) {
 }
 
 void GenCodeVisitor::visit(FunctionCallExp* exp) {
-    // Guardar registros caller-saved
-     *output << "    pushq %rax\n";
-    *output << "    pushq %rcx\n";
-    *output << "    pushq %rdx\n";
-    *output << "    pushq %rsi\n";
-    *output << "    pushq %rdi\n";
-    *output << "    pushq %r8\n";
-    *output << "    pushq %r9\n";
-    *output << "    pushq %r10\n";
-    *output << "    pushq %r11\n";
-    
-    // Pasar argumentos (System V ABI: rdi, rsi, rdx, rcx, r8, r9)
+
+    int stack_args_count = (exp->args.size() > 6) ? exp->args.size() - 6 : 0;
+    if (stack_args_count > 0) {
+        *output << "    subq $" << (stack_args_count * 8) << ", %rsp\n";
+    }
+
     vector<string> arg_registers = {"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"};
-    
-    for (size_t i = 0; i < exp->args.size() && i < 6; i++) {
+    for (int i = exp->args.size() - 1; i >= 0; i--) {
         exp->args[i]->accept(this);
-        *output << "    movq %rax, " << arg_registers[i] << "\n";
+        
+        if (i < 6) {
+            *output << "    movq %rax, " << arg_registers[i] << "\n"; // args register
+        } else {
+            *output << "    pushq %rax\n"; // arg in stack
+        }
+    }
+    
+    *output << "    movq %rsp, %r11\n";  // Guardar rsp actual
+    if ((stack_args_count % 2) == 0) {   // Si la cantidad de pushq es impar
+        *output << "    subq $8, %rsp\n";
     }
     
     // Llamar función
     *output << "    call " << exp->name << "\n";
-    
-    // Restaurar registros
-     *output << "    popq %r11\n";
-    *output << "    popq %r10\n";
-    *output << "    popq %r9\n";
-    *output << "    popq %r8\n";
-    *output << "    popq %rdi\n";
-    *output << "    popq %rsi\n";
-    *output << "    popq %rdx\n";
-    *output << "    popq %rcx\n";
-    *output << "    popq %rax\n";
+
+    // clear args
+    if (stack_args_count > 0) {
+        *output << "    addq $" << (stack_args_count * 8) << ", %rsp\n";
+    }
 }
 
 // Corrected Array Access
@@ -1062,6 +1059,16 @@ void GenCodeVisitor::visit(PrintStm* stm) {
         if (auto* id = dynamic_cast<IdentifierExp*>(memberAccess->object.get())) {
             string var_name = id->name;
             string var_type = env.lookup_type(var_name);
+            string format_label;
+            if (var_type == "int") {
+                format_label = "int_format";
+            } else if (var_type == "float" || var_type == "double") {
+                format_label = "float_format";
+            } else if (var_type == "char") {
+                format_label = "char_format";
+            } else {
+                format_label = "int_format"; // Default
+            }
             
             if (var_type.find("struct ") == 0) {
                 string struct_name = var_type.substr(7);
@@ -1071,7 +1078,7 @@ void GenCodeVisitor::visit(PrintStm* stm) {
                 
                 *output << "    movq " << (var_offset + field_offset) << "(%rbp), %rax\n";
                 *output << "    movq %rax, %rsi\n";
-                *output << "    leaq int_format(%rip), %rdi\n";
+                *output << "    leaq " << format_label << "(%rip), %rdi\n";
                 *output << "    call printf\n";
                 return;
             }
@@ -1081,6 +1088,7 @@ void GenCodeVisitor::visit(PrintStm* stm) {
     stm->exp->accept(this);
     *output << "    movq %rax, %rsi\n";
     *output << "    leaq int_format(%rip), %rdi\n";
+    *output << "    movq $0, %rax\n";
     *output << "    call printf\n";
 }
 
@@ -1224,28 +1232,46 @@ void GenCodeVisitor::visit(VarDeclaration* stm) {
     }
 }
 
+// review
 void GenCodeVisitor::visit(FunctionDeclaration* stm) {
     // Function prologue
-    *output << stm->name << ":\n";
-    *output << "    pushq %rbp\n";              // Save old base pointer
-    *output << "    movq %rsp, %rbp\n";         // Set new base pointer
+    *output << "\n# Función: " << stm->name << "(";
+    for (size_t i = 0; i < stm->params.size(); ++i) {
+        if (i != 0) *output << ", ";
+        *output << stm->params[i].first << " " << stm->params[i].second;
+    }
+    *output << ")\n";
     
-    // Calculate space needed for local variables
+    *output << stm->name << ":\n";
+    *output << "    pushq %rbp\n";
+    *output << "    movq %rsp, %rbp\n";
+    
+    // Calculate needed space for local variables
     int local_vars_size = 0;
     unordered_map<string, int> saved_offsets = var_offsets;
     var_offsets.clear();
+    env.add_level();
     
-    // Process parameters first (they are at positive offsets from RBP)
+    // Process parameters (System V AMD64 calling convention)
     vector<string> param_registers = {"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"};
-    for (size_t i = 0; i < stm->params.size() && i < 6; i++) {
-        int offset = 8 + 8 * i;  // First param at RBP+16 (8 for RBP, 8 for return address)
-        var_offsets[stm->params[i].second] = offset;
+    int param_offset = 16; // Skip saved RBP (8) and return address (8)
+    
+    // Save parameters to stack
+    for (size_t i = 0; i < stm->params.size(); i++) {
+        if (i < 6) {
+            // Parameters passed in registers - save to stack
+            *output << "    movq " << param_registers[i] << ", -" << (i+1)*8 << "(%rbp) # guarda " 
+                   << stm->params[i].second << "\n";
+            var_offsets[stm->params[i].second] = -(i+1)*8;
+        } else {
+            // Parameters passed on stack (already at correct position)
+            var_offsets[stm->params[i].second] = param_offset + 8 * (i - 6);
+        }
         env.add_var(stm->params[i].second, stm->params[i].first);
     }
     
-    // Process local variables (negative offsets from RBP)
-    env.add_level();
-    stack_offset = 0;  // Reset for local vars
+    // Calculate space needed for local variables
+    stack_offset = -8 - 8*stm->params.size(); // Start below saved params
     
     // First pass to calculate total size needed
     for (auto& stmt : stm->body->statements) {
@@ -1259,15 +1285,17 @@ void GenCodeVisitor::visit(FunctionDeclaration* stm) {
         }
     }
     
-    // Align stack to 16 bytes (System V ABI requirement)
+    // Align stack to 16 bytes if needed
     if ((local_vars_size % 16) != 0) {
         local_vars_size += (16 - (local_vars_size % 16));
     }
     
-    *output << "    subq $" << local_vars_size << ", %rsp\n";  // Allocate stack space
+    if (local_vars_size > 0) {
+        *output << "    subq $" << local_vars_size << ", %rsp # espacio para variables locales\n";
+    }
     
     // Second pass to generate initialization code
-    stack_offset = -8;  // Start allocating below saved RBP
+    stack_offset = -8 - 8*stm->params.size();
     for (auto& stmt : stm->body->statements) {
         if (auto varDecl = dynamic_cast<VarDeclaration*>(stmt.get())) {
             int size = 8;
@@ -1280,14 +1308,8 @@ void GenCodeVisitor::visit(FunctionDeclaration* stm) {
             
             if (varDecl->init) {
                 varDecl->init->accept(this);
-                if (size == 8) {
-                    *output << "    movq %rax, " << stack_offset << "(%rbp)\n";
-                } else {
-                    // Handle struct initialization
-                    for (int i = 0; i < size; i += 8) {
-                        *output << "    movq %rax, " << stack_offset + i << "(%rbp)\n";
-                    }
-                }
+                *output << "    movq %rax, " << stack_offset << "(%rbp) # inicializa " 
+                       << varDecl->name << "\n";
             }
         }
     }
@@ -1301,16 +1323,16 @@ void GenCodeVisitor::visit(FunctionDeclaration* stm) {
     
     // Default return if no explicit return statement
     if (!dynamic_cast<ReturnStm*>(stm->body->statements.back().get())) {
-        *output << "    movq $0, %rax\n";        // Default return 0
-        *output << "    leave\n";                // Restore stack frame
+        *output << "    movq $0, %rax\n";
+        *output << "    popq %rbp\n";
         *output << "    ret\n";
     }
     
     // Clean up
     env.remove_level();
     var_offsets = saved_offsets;
-    *output << "\n";  // Separate functions with newline
 }
+
 void GenCodeVisitor::visit(StructDeclaration* stm) {
     env.add_struct(stm->name, stm->members);
 }

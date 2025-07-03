@@ -2,7 +2,7 @@
 
 int algo() { 
     return 20; 
-    }
+}
 
 int main() {
     int x; 
