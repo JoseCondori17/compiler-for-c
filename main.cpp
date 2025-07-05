@@ -34,35 +34,39 @@ int main(int argc, const char *argv[])
 
     string input_copy = input;
     Scanner scanner_test(input_copy.c_str());
+    cout << "SCANNER RUN:" << endl;
     test_scanner(&scanner_test);
-    cout << "Scanner exitoso" << endl;
+    cout << "SCANNER CORRECT" << endl;
     cout << endl;
-    cout << "Iniciando parsing:" << endl;
     Parser parser(&scanner);
     try {
+        cout << "===========================" << endl;
+        cout << "PARSING RUN:" << endl;
         unique_ptr<Program> program = parser.parse();
-        cout << "Parsing exitoso" << endl << endl;
-        cout << "Iniciando Visitor:" << endl;
+        cout << "PARSING CORRECT" << endl;
+        cout << endl;
+
         PrintVisitor printVisitor;
         TypeVisitor typeVisitor;
         //ImpCODE interpreter;
+        cout << "===========================" << endl;
         cout << endl;
         cout << "PRINTER RUN:" << endl;
         printVisitor.imprimir(program.get());
-        cout << "PRINT VISITOR CORRECT:" << endl;
+        cout << "PRINT VISITOR CORRECT" << endl;
         cout  << endl;
-
+        cout << "===========================" << endl;
         cout << "TYPE CHECKER RUN:" << endl;
         typeVisitor.visit(program.get());
-        cout << "TYPE CHECKER VISITOR CORRECT:" << endl;
+        cout << "TYPE CHECKER VISITOR CORRECT" << endl;
         cout  << endl;
-        
+        cout  << "===========================" << endl;
         cout << "GENCODE RUN:" << endl;
         ofstream output("output.s");
         GenCodeVisitor generator(&output);
         generator.generate(program.get());
         output.close();
-        cout << "GENCODE VISITOR CORRECT:" << endl;
+        cout << "GENCODE VISITOR CORRECT" << endl;
         cout  << endl;
     
         /* cout << endl << "Run program:" << endl;

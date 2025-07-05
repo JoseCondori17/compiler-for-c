@@ -1016,7 +1016,6 @@ void GenCodeVisitor::visit(MemberAccessExp* exp) {
     }
     // General fallback: evaluate object, then offset
     exp->object->accept(this);
-    // Not implemented: dynamic offset for general cases
 }
 
 void GenCodeVisitor::visit(ConditionalExp* exp) {

@@ -282,13 +282,9 @@ Scanner::~Scanner() {}
 
 void test_scanner(Scanner* scanner) {
     Token* current;
-    cout << "-------------------" << endl;
-    cout << "Iniciando Scanner:" << endl;
     do {
         current = scanner->nextToken();
         cout << *current << endl;
         delete current;
     } while (current->type != Token::END);
-    cout << "Fin del escaneo." << endl;
-    cout << "----------------" << endl;
 }

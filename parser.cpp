@@ -327,7 +327,6 @@ unique_ptr<ForStm> Parser::parseForStatement() {
 
 unique_ptr<DoWhileStm> Parser::parseDoWhileStatement() {
     auto body = parseStatement();
-    
     expect(Token::WHILE, "Expected 'while' after do body");
     expect(Token::PL, "Expected '(' after 'while'");
     auto condition = parseExpression();

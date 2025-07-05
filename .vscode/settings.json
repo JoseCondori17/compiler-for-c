@@ -2,7 +2,8 @@
   "files.associations": {
     "*.dbclient-js": "javascript",
     "xstring": "cpp",
-    "memory": "cpp"
+    "memory": "cpp",
+    "iostream": "cpp"
   },
   "C_Cpp_Runner.cCompilerPath": "gcc",
   "C_Cpp_Runner.cppCompilerPath": "g++",

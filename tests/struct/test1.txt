@@ -5,11 +5,11 @@ struct Person {
 };
 
 int main() {
-    int number;
     struct Person p;
     p.points = 5;
     p.age = 14;
     p.price = 25;
+    struct Person q;
     printf(p.points);
     printf(p.age);
     printf(p.price);
